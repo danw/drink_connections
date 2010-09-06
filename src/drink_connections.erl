@@ -29,7 +29,7 @@
 -export ([start_link/0]).
 -export ([init/1, terminate/2, code_change/3]).
 -export ([handle_call/3, handle_cast/2, handle_info/2]).
--export ([register/3, set_user/1, set_app/1]).
+-export ([register/3, set_user/1, set_app/1, get/0]).
 
 -record (state, {}).
 
@@ -37,6 +37,7 @@ start_link () ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init ([]) ->
+    ets:new(connections, [set, private, named_table]),
     {ok, #state{}}.
 
 terminate (_Reason, _State) ->
@@ -48,8 +49,9 @@ code_change (_OldVsn, State, _Extra) ->
 handle_cast (_Request, State) -> {noreply, State}.
 
 handle_call ({register, Pid, Username, Transport, App}, _From, State) ->
-    dw_events:send(drink_connections, {connected, Pid, Username, Transport, App}),
     erlang:monitor(process, Pid),
+    ets:insert(connections, {Pid, Username, Transport, App}),
+    dw_events:send(drink_connections, {connected, Pid, Username, Transport, App}),
     {reply, ok, State};
 handle_call ({set_user, Pid, Username}, _From, State) ->
     dw_events:send(drink_connections, {changed, Pid, user, Username}),
@@ -57,9 +59,13 @@ handle_call ({set_user, Pid, Username}, _From, State) ->
 handle_call ({set_app, Pid, App}, _From, State) ->
     dw_events:send(drink_connections, {changed, Pid, app, App}),
     {reply, ok, State};
+handle_call ({get}, _From, State) ->
+    List = ets:tab2list(connections),
+    {reply, {ok, List}, State};
 handle_call (_Request, _From, State) -> {noreply, State}.
 
 handle_info ({'DOWN', _Ref, process, Pid, _Info}, State) ->
+    ets:delete(connections, Pid),
     dw_events:send(drink_connections, {disconnected, Pid}),
     {noreply, State};
 handle_info (_Info, State) -> {noreply, State}.
@@ -72,3 +78,6 @@ set_user(Username) when is_list(Username) ->
 
 set_app(App) when is_atom(App) ->
     gen_server:call(?MODULE, {set_app, self(), App}).
+
+get() ->
+    gen_server:call(?MODULE, {get}).
