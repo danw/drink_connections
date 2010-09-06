@@ -1,0 +1,11 @@
+{application, drink_connections,
+ [{description, "Drink User Connections"},
+  {vsn, "1.0"},
+  {modules, [drink_connections_app,
+             drink_connections_sup,
+             drink_connections]},
+  {registered,[]},
+  {applications, [kernel, stdlib, sasl]},
+  {mod, {drink_connections_app, []}},
+  {start_phases, []}
+]}.
